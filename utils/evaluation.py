@@ -31,10 +31,14 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dir, mode):
 
         # calculate loss function
         loss, RE, KL = model.calculate_loss(x, average=True)
+        # @ashesh: Replacing this with item()
+        # evaluate_loss += loss.data[0]
+        # evaluate_re += -RE.data[0]
+        # evaluate_kl += KL.data[0]
 
-        evaluate_loss += loss.data[0]
-        evaluate_re += -RE.data[0]
-        evaluate_kl += KL.data[0]
+        evaluate_loss += loss.item()
+        evaluate_re += -RE.item()
+        evaluate_kl += KL.item()
 
         # print N digits
         if batch_idx == 1 and mode == 'validation':
