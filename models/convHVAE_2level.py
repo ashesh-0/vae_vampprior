@@ -4,7 +4,7 @@ import numpy as np
 
 import math
 
-from scipy.misc import logsumexp
+from scipy.special import logsumexp
 
 
 import torch
@@ -17,7 +17,7 @@ from utils.visual_evaluation import plot_histogram
 from utils.nn import he_init, GatedDense, NonLinear, \
     Conv2d, GatedConv2d, GatedResUnit, ResizeGatedConv2d, MaskedConv2d, ResUnitBN, ResizeConv2d, GatedResUnit, GatedConvTranspose2d
 
-from Model import Model
+from models.Model import Model
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #=======================================================================================================================
@@ -288,23 +288,34 @@ class VAE(Model):
             log_prior = log_Normal_standard(z2, dim=1)
 
         elif self.args.prior == 'vampprior':
-            # z - MB x M
+            # z - MB x M: MB is mini batch size. M is the latent dimension
+            # C is the number of psuedo inputs.
             C = self.args.number_components
 
             # calculate params
-            X = self.means(self.idle_input).view(-1, self.args.input_size[0], self.args.input_size[1], self.args.input_size[2])
 
-            # calculate params for given data
-            z2_p_mean, z2_p_logvar = self.q_z2(X)  # C x M)
+            X = self.means(self.idle_input) # 500*784, where 500 is the number of psudo inputs.
+            X = X.view(-1, self.args.input_size[0], self.args.input_size[1], self.args.input_size[2]) # 500*1*28*28
 
-            # expand z
+            # This is the mean and the var of the individual distribution of psudo inputs.
+            z2_p_mean, z2_p_logvar = self.q_z2(X)  # C x M) 500 * 40
+
+            # We are using vectorization to compute this efficiently.
+            # (100, 40) => (100, 1, 40)
             z_expand = z2.unsqueeze(1)
+
+            # (500, 40)= > (1, 500, 40)
             means = z2_p_mean.unsqueeze(0)
             logvars = z2_p_logvar.unsqueeze(0)
 
-            a = log_Normal_diag(z_expand, means, logvars, dim=2) - math.log(C)  # MB x C
-            a_max, _ = torch.max(a, 1)  # MB
+            # in computing the probablity of z2, we sum over the latent dimension (20)
+            # We need to divide by C (500) to keep it a valid distribution. Average of gaussians.
+            a = log_Normal_diag(z_expand, means, logvars, dim=2) - math.log(C)  # MB x C (100 * 500)
+            a_max, _ = torch.max(a, 1)  # MB. sum would be a more accurate description. max() is close to the truth as
+            # if we have a multi modal distribution, then probably, only one of the modes of the distribution would
+            # give some non-zero probablity. Other modes probably don't contribute much to it.
             # calculte log-sum-exp
+            # NOTE: This is equivalent to simply taking the sum of a. Not sure why they did it.
             log_prior = (a_max + torch.log(torch.sum(torch.exp(a - a_max.unsqueeze(1)), 1)))  # MB
 
         else:

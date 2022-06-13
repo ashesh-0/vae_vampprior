@@ -42,10 +42,13 @@ def train_vae(epoch, args, train_loader, model, optimizer):
         loss.backward()
         # optimization
         optimizer.step()
-
-        train_loss += loss.data[0]
-        train_re += -RE.data[0]
-        train_kl += KL.data[0]
+        # ashesh: this has been commented out.
+        # train_loss += loss.data[0]
+        # train_re += -RE.data[0]
+        # train_kl += KL.data[0]
+        train_loss += loss.item()
+        train_re += -RE.item()
+        train_kl += KL.item()
 
     # calculate final loss
     train_loss /= len(train_loader)  # loss function already averages over batch size
